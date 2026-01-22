@@ -13,18 +13,21 @@ import {
   WifiOff,
   XCircle,
   LogIn,
-  Settings
+  Settings,
+  ShieldCheck
 } from "lucide-react";
 
 import { useAppStore } from "./store/useAppStore";
 import { useGames } from "./hooks/useGames";
 import { useCloud } from "./hooks/useCloud";
 
+// Componentes Modulares
 import { NavButton } from "./components/NavButton";
 import { GameCard } from "./components/GameCard";
 import { StatusCard } from "./components/StatusCard";
 import { CloudView } from "./components/CloudView";
 import { RestoreModal } from "./components/RestoreModal";
+import { SettingsView } from "./components/SettingsView";
 import { GameInfo } from "./types";
 
 function App() {
@@ -76,7 +79,7 @@ function App() {
           <div className="absolute inset-0 bg-steam-light/20 blur-xl rounded-full"></div>
           <Loader2 size={48} className="relative text-steam-light animate-spin" />
         </div>
-        <h2 className="text-xl font-bold mb-2 tracking-tight text-white/90">Steam Save Manager</h2>
+        <h2 className="text-xl font-bold mb-2 tracking-tight">Steam Save Manager</h2>
         <p className="text-sm font-mono text-gray-500 uppercase tracking-widest">{initStatus}</p>
       </div>
     );
@@ -91,7 +94,7 @@ function App() {
             <Gamepad2 className="text-white w-6 h-6" />
           </div>
           <span className="hidden lg:block font-bold text-xl tracking-wide bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
-            Steam Save Manager
+            SSM Pro
           </span>
         </div>
 
@@ -133,7 +136,7 @@ function App() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-steam-light transition-colors" size={18} />
             <input 
               type="text" 
-              placeholder="Buscar jogo na biblioteca..." 
+              placeholder="Buscar jogo..." 
               className="bg-black/20 border border-white/5 rounded-full pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-steam-light/50 w-64 text-gray-200 transition-all"
             />
           </div>
@@ -157,15 +160,17 @@ function App() {
                 </div>
               </div>
             ) : (
-              <button onClick={handleLogin} className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all text-sm font-bold">
+              <button onClick={handleLogin} className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all text-sm font-bold hover:scale-105 active:scale-95">
                 <LogIn size={18} /> Login Google
               </button>
             )}
           </div>
         </header>
 
+        {/* ÁREA DE RENDERIZAÇÃO DE ABAS */}
         <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
           
+          {/* DASHBOARD VIEW */}
           {activeTab === "dashboard" && (
             <div className="space-y-8 animate-in fade-in duration-500">
               <div className="w-full h-56 rounded-3xl relative overflow-hidden shadow-2xl ring-1 ring-white/10">
@@ -173,23 +178,39 @@ function App() {
                 <img 
                   src="https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=2070" 
                   className="absolute inset-0 w-full h-full object-cover mix-blend-overlay opacity-40"
-                  alt="Gamer Background"
+                  alt="Background"
                 />
                 <div className="relative z-20 p-10 h-full flex flex-col justify-end">
                   <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-steam-light text-xs font-bold uppercase tracking-wider border border-white/10 w-fit backdrop-blur-md mb-4 shadow-xl">
-                    <CheckCircle2 size={12} /> Monitoramento Online
+                    <ShieldCheck size={12} /> Monitoramento SSM Pro Ativo
                   </span>
-                  <h2 className="text-4xl font-bold text-white mb-2 tracking-tight">Painel Central</h2>
-                  <p className="text-gray-200 max-w-lg font-medium drop-shadow-md">
-                    O Steam Save Manager está protegendo <span className="text-steam-light font-bold">{games.length} jogos</span> instalados no seu sistema.
+                  <h2 className="text-4xl font-bold text-white mb-2 tracking-tight text-shadow-lg">Painel de Controle</h2>
+                  <p className="text-gray-200 max-w-lg font-medium">
+                    Sua biblioteca possui <span className="text-steam-light font-bold">{games.length} jogos</span> mapeados. 
+                    Seus saves estão sendo protegidos e versionados automaticamente.
                   </p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <StatusCard label="Total de Jogos" value={games.length.toString()} icon={<Gamepad2 className="text-steam-light" />} sub="Instalados" />
-                <StatusCard label="Nuvem" value={isDriveConnected ? "Online" : "Offline"} icon={isDriveConnected ? <Wifi className="text-green-400" /> : <WifiOff className="text-gray-400" />} sub={isDriveConnected ? `Conectado como ${userProfile?.name}` : "Sincronização desativada"} />
-                <StatusCard label="Saves Protegidos" value={games.filter(g => g.last_backup).length.toString()} icon={<Download className="text-steam-purple" />} sub="Com pontos de restauração locais" />
+                <StatusCard 
+                  label="Total de Jogos" 
+                  value={games.length.toString()} 
+                  icon={<Gamepad2 className="text-steam-light" />} 
+                  sub="Mapeados pela Steam" 
+                />
+                <StatusCard 
+                  label="Status da Nuvem" 
+                  value={isDriveConnected ? "Online" : "Offline"} 
+                  icon={isDriveConnected ? <Wifi className="text-green-400" /> : <WifiOff className="text-gray-400" />} 
+                  sub={isDriveConnected ? `Conectado como ${userProfile?.name}` : "Sincronização desativada"} 
+                />
+                <StatusCard 
+                  label="Backups Locais" 
+                  value={games.filter(g => g.last_backup).length.toString()} 
+                  icon={<Download className="text-steam-purple" />} 
+                  sub="Jogos com pontos de restauração" 
+                />
               </div>
             </div>
           )}
@@ -198,7 +219,7 @@ function App() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 animate-in slide-in-from-bottom-4 duration-300">
               {gamesLoading ? (
                 <div className="col-span-full py-20 text-center text-gray-500">
-                  <Loader2 className="mx-auto animate-spin mb-4" size={32} />
+                  <Loader2 className="mx-auto animate-spin mb-4 text-steam-light" size={32} />
                   <p className="font-mono text-sm uppercase">Escaneando diretórios da Steam...</p>
                 </div>
               ) : (
@@ -217,8 +238,13 @@ function App() {
             <CloudView games={games} />
           )}
 
+          {activeTab === "settings" && (
+            <SettingsView />
+          )}
+
         </div>
       </main>
+
 
       {selectedGameForRestore && (
         <RestoreModal 
@@ -230,7 +256,7 @@ function App() {
 
       {feedback.isOpen && (
         <div className="fixed bottom-8 right-8 z-[100] animate-in slide-in-from-right-8 duration-300">
-          <div className={`bg-[#1b2838]/95 border ${feedback.type === "success" ? "border-green-500/30 shadow-green-500/10" : "border-red-500/30 shadow-red-500/10"} rounded-2xl shadow-2xl p-6 w-85 relative overflow-hidden backdrop-blur-xl`}>
+          <div className={`bg-[#1b2838]/95 border ${feedback.type === "success" ? "border-green-500/30 shadow-green-500/10" : "border-red-500/30 shadow-red-500/10"} rounded-2xl shadow-2xl p-6 w-85 relative overflow-hidden backdrop-blur-xl ring-1 ring-white/5`}>
             <div className="flex items-center gap-4">
               <div className={`p-2 rounded-full ${feedback.type === "success" ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>
                 {feedback.type === "success" ? <CheckCircle2 size={24} /> : <XCircle size={24} />}
@@ -239,10 +265,11 @@ function App() {
                 <h3 className="font-bold text-white text-sm tracking-tight">{feedback.title}</h3>
                 <p className="text-xs text-gray-400 mt-1 line-clamp-2 leading-relaxed">{feedback.message}</p>
               </div>
-              <button onClick={closeFeedback} className="text-gray-500 hover:text-white transition-colors self-start">
+              <button onClick={closeFeedback} className="text-gray-500 hover:text-white transition-colors self-start p-1">
                 <XCircle size={16} />
               </button>
             </div>
+            <div className={`absolute bottom-0 left-0 h-1 w-full ${feedback.type === "success" ? "bg-green-500" : "bg-red-500"} opacity-20`}></div>
           </div>
         </div>
       )}

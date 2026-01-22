@@ -1,3 +1,4 @@
+// src-tauri/src/lib.rs
 mod models;
 mod services;
 mod commands;
@@ -13,12 +14,18 @@ pub fn run() {
             access_token: Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![
+            // Comandos de Jogo
             commands::game_commands::get_installed_games,
             commands::game_commands::backup_game,
             commands::game_commands::update_manifest_db,
             commands::game_commands::get_backups,
             commands::game_commands::restore_backup,
             commands::game_commands::create_zip_for_cloud,
+            commands::game_commands::toggle_auto_backup,
+            commands::game_commands::load_app_config,
+            commands::game_commands::save_app_config,
+
+            // Comandos de Nuvem
             commands::cloud_commands::login_google_drive,
             commands::cloud_commands::check_auth_status,
             commands::cloud_commands::upload_to_drive,

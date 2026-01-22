@@ -1,9 +1,7 @@
-// models.rs - Definições de estruturas de dados compartilhadas
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-// Estado de Autenticação Global
 pub struct AuthState {
     pub access_token: Mutex<Option<String>>,
 }

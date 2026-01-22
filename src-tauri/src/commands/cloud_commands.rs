@@ -1,4 +1,4 @@
-use tauri::{AppHandle, command, State, Manager};
+use tauri::{AppHandle, command, State};
 use crate::models::{AuthState, GoogleProfile};
 use crate::services::cloud_service::CloudService;
 

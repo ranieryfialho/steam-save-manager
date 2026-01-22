@@ -1,6 +1,6 @@
 use std::path::Path;
 use std::fs;
-use tauri::{AppHandle, Manager}; // Removido o import 'State' não utilizado
+use tauri::{AppHandle, Manager};
 use oauth2::basic::BasicClient;
 use oauth2::reqwest::http_client;
 use oauth2::{
