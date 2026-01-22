@@ -1,11 +1,10 @@
-// services/backup_service.rs
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path};
 use chrono::Local;
 use directories::UserDirs;
 use steamlocate::SteamDir;
-use tauri::AppHandle;
+use tauri::{AppHandle, Window, Emitter};
 use zip::write::SimpleFileOptions;
 use crate::models::BackupEntry;
 use crate::services::steam_service::SteamService;
@@ -13,12 +12,14 @@ use crate::services::steam_service::SteamService;
 pub struct BackupService;
 
 impl BackupService {
-    pub fn perform_backup(app: AppHandle, game_id: u32, game_name: String) -> String {
+    pub fn perform_backup(window: Window, app: AppHandle, game_id: u32, game_name: String) -> String {
         let user_dirs = UserDirs::new().unwrap();
         let doc_dir = user_dirs.document_dir().unwrap_or_else(|| user_dirs.home_dir());
         let timestamp = Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
         let safe_name = game_name.replace(|c: char| !c.is_alphanumeric() && c != ' ', "_");
         let backup_root = doc_dir.join("SaveManagerBackups").join(&safe_name).join(&timestamp);
+
+        let _ = window.emit("backup-status", format!("Iniciando backup de {}...", game_name));
 
         if let Err(e) = fs::create_dir_all(&backup_root) {
             return format!("Erro IO: {}", e);
@@ -27,9 +28,9 @@ impl BackupService {
         let mut count = 0;
         let options = fs_extra::dir::CopyOptions::new().overwrite(true).copy_inside(true);
 
-        // 1. Custom Path
         if let Some(path) = SteamService::get_custom_path(&app, game_id) {
             if path.exists() {
+                let _ = window.emit("backup-status", "Copiando arquivos customizados...");
                 let _ = fs::create_dir_all(backup_root.join("Custom_Saves"));
                 if fs_extra::dir::copy(&path, backup_root.join("Custom_Saves"), &options).is_ok() {
                     count += 1;
@@ -37,19 +38,21 @@ impl BackupService {
             }
         }
 
-        // 2. Manifest Paths (Ludusavi)
         let manifest_paths = SteamService::get_manifest_paths(&app, game_id);
-        for (idx, path) in manifest_paths.iter().enumerate() {
-            if path.exists() {
-                let _ = fs::create_dir_all(backup_root.join(format!("Game_Data_{}", idx)));
-                if fs_extra::dir::copy(path, backup_root.join(format!("Game_Data_{}", idx)), &options).is_ok() {
-                    count += 1;
+        if !manifest_paths.is_empty() {
+            let _ = window.emit("backup-status", "Sincronizando dados do manifesto...");
+            for (idx, path) in manifest_paths.iter().enumerate() {
+                if path.exists() {
+                    let _ = fs::create_dir_all(backup_root.join(format!("Game_Data_{}", idx)));
+                    if fs_extra::dir::copy(path, backup_root.join(format!("Game_Data_{}", idx)), &options).is_ok() {
+                        count += 1;
+                    }
                 }
             }
         }
 
-        // 3. Steam UserData (Cloud Saves Locais)
         if let Ok(steamdir) = SteamDir::locate() {
+            let _ = window.emit("backup-status", "Buscando saves na nuvem local...");
             if let Ok(entries) = fs::read_dir(steamdir.path().join("userdata")) {
                 for entry in entries.flatten() {
                     let possible = entry.path().join(game_id.to_string());
@@ -64,76 +67,11 @@ impl BackupService {
         }
 
         if count > 0 {
+            let _ = window.emit("backup-status", "Backup finalizado com sucesso!");
             format!("Sucesso:{}", timestamp)
         } else {
             let _ = fs::remove_dir_all(&backup_root);
             "Aviso: Nenhum arquivo encontrado.".to_string()
-        }
-    }
-
-    pub fn restore_backup(app: AppHandle, game_id: u32, game_name: String, timestamp: String) -> String {
-        let user_dirs = UserDirs::new().unwrap();
-        let doc_dir = user_dirs.document_dir().unwrap_or_else(|| user_dirs.home_dir());
-        let safe_name = game_name.replace(|c: char| !c.is_alphanumeric() && c != ' ', "_");
-        let backup_root = doc_dir.join("SaveManagerBackups").join(&safe_name).join(&timestamp);
-
-        if !backup_root.exists() {
-            return "Erro: Backup não encontrado.".to_string();
-        }
-
-        let mut restored_count = 0;
-        let mut options = fs_extra::dir::CopyOptions::new().overwrite(true).copy_inside(true);
-        options.content_only = true;
-
-        // Restauração Custom
-        if let Some(target_path) = SteamService::get_custom_path(&app, game_id) {
-            let source = backup_root.join("Custom_Saves");
-            if source.exists() && target_path.exists() {
-                if let Ok(entries) = fs::read_dir(&source) {
-                    for entry in entries.flatten() {
-                        let _ = fs_extra::dir::copy(entry.path(), &target_path, &options);
-                    }
-                    restored_count += 1;
-                }
-            }
-        }
-
-        // Restauração Manifest
-        let manifest_paths = SteamService::get_manifest_paths(&app, game_id);
-        for (idx, target_path) in manifest_paths.iter().enumerate() {
-            let source_root = backup_root.join(format!("Game_Data_{}", idx));
-            if source_root.exists() && target_path.exists() {
-                if let Ok(entries) = fs::read_dir(&source_root) {
-                    for entry in entries.flatten() {
-                        let _ = fs_extra::dir::copy(entry.path(), &target_path, &options);
-                    }
-                    restored_count += 1;
-                }
-            }
-        }
-
-        // Restauração Steam Cloud
-        if let Ok(steamdir) = SteamDir::locate() {
-            if let Ok(entries) = fs::read_dir(steamdir.path().join("userdata")) {
-                for entry in entries.flatten() {
-                    let target_path = entry.path().join(game_id.to_string());
-                    let source_root = backup_root.join("Steam_Cloud");
-                    if target_path.exists() && source_root.exists() {
-                        if let Ok(inner_entries) = fs::read_dir(&source_root) {
-                            for inner in inner_entries.flatten() {
-                                let _ = fs_extra::dir::copy(inner.path(), &target_path, &options);
-                            }
-                            restored_count += 1;
-                        }
-                    }
-                }
-            }
-        }
-
-        if restored_count > 0 {
-            "Sucesso:Arquivos Restaurados".to_string()
-        } else {
-            "Erro: Nada restaurado.".to_string()
         }
     }
 
@@ -167,6 +105,46 @@ impl BackupService {
         backups
     }
 
+    pub fn restore_backup(app: AppHandle, game_id: u32, game_name: String, timestamp: String) -> String {
+        let user_dirs = UserDirs::new().unwrap();
+        let doc_dir = user_dirs.document_dir().unwrap_or_else(|| user_dirs.home_dir());
+        let safe_name = game_name.replace(|c: char| !c.is_alphanumeric() && c != ' ', "_");
+        let backup_root = doc_dir.join("SaveManagerBackups").join(&safe_name).join(&timestamp);
+
+        if !backup_root.exists() { return "Erro: Backup inexistente.".to_string(); }
+
+        let mut restored_count = 0;
+        let mut options = fs_extra::dir::CopyOptions::new().overwrite(true).copy_inside(true);
+        options.content_only = true;
+
+        if let Some(target_path) = SteamService::get_custom_path(&app, game_id) {
+            let source = backup_root.join("Custom_Saves");
+            if source.exists() && target_path.exists() {
+                if let Ok(entries) = fs::read_dir(&source) {
+                    for entry in entries.flatten() {
+                        let _ = fs_extra::dir::copy(entry.path(), &target_path, &options);
+                    }
+                    restored_count += 1;
+                }
+            }
+        }
+
+        let manifest_paths = SteamService::get_manifest_paths(&app, game_id);
+        for (idx, target_path) in manifest_paths.iter().enumerate() {
+            let source_root = backup_root.join(format!("Game_Data_{}", idx));
+            if source_root.exists() && target_path.exists() {
+                if let Ok(entries) = fs::read_dir(&source_root) {
+                    for entry in entries.flatten() {
+                        let _ = fs_extra::dir::copy(entry.path(), &target_path, &options);
+                    }
+                    restored_count += 1;
+                }
+            }
+        }
+
+        if restored_count > 0 { "Sucesso:Arquivos Restaurados".to_string() } else { "Erro".to_string() }
+    }
+
     pub fn zip_for_cloud(game_name: String, timestamp: String) -> String {
         let user_dirs = UserDirs::new().unwrap();
         let doc_dir = user_dirs.document_dir().unwrap_or_else(|| user_dirs.home_dir());
@@ -174,26 +152,15 @@ impl BackupService {
         let backup_path = doc_dir.join("SaveManagerBackups").join(&safe_name).join(&timestamp);
         let zip_file_path = doc_dir.join("SaveManagerBackups").join(&safe_name).join(format!("{}.zip", timestamp));
 
-        if !backup_path.exists() { return "Erro: Pasta não existe.".to_string(); }
-        if zip_file_path.exists() { return "Aviso: ZIP já existe.".to_string(); }
+        if !backup_path.exists() { return "Erro".to_string(); }
 
-        let file = match File::create(&zip_file_path) {
-            Ok(f) => f,
-            Err(e) => return format!("Erro ZIP: {}", e),
-        };
-
+        let file = File::create(&zip_file_path).unwrap();
         let mut zip = zip::ZipWriter::new(file);
-        let options = SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Deflated)
-            .unix_permissions(0o755);
+        let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
-        match Self::zip_directory(&backup_path, "", &mut zip, options) {
-            Ok(_) => {
-                let _ = zip.finish();
-                format!("Sucesso:{:?}", zip_file_path)
-            }
-            Err(e) => format!("Erro: {}", e),
-        }
+        Self::zip_directory(&backup_path, "", &mut zip, options).unwrap();
+        zip.finish().unwrap();
+        format!("Sucesso:{:?}", zip_file_path)
     }
 
     fn zip_directory(dir: &Path, prefix: &str, zip: &mut zip::ZipWriter<File>, options: SimpleFileOptions) -> zip::result::ZipResult<()> {
