@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-steam-bg text-white overflow-hidden;
+    background-image: radial-gradient(circle at 10% 20%, rgba(114, 63, 166, 0.15) 0%, transparent 40%),
+                      radial-gradient(circle at 90% 80%, rgba(64, 44, 191, 0.15) 0%, transparent 40%);
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply bg-white/5 backdrop-blur-md border border-white/10 shadow-xl;
+  }
+  
+  .glass-card {
+    @apply glass-panel rounded-xl transition-all duration-300 hover:bg-white/10 hover:scale-[1.02] hover:border-steam-light/30 hover:shadow-2xl cursor-pointer relative overflow-hidden;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #5F94D9;
+}
