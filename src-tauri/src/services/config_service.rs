@@ -1,4 +1,3 @@
-// src-tauri/src/services/config_service.rs
 use serde::{Deserialize, Serialize};
 use std::fs;
 use tauri::{AppHandle, Manager};
@@ -32,7 +31,6 @@ impl ConfigService {
     pub fn save_config(app: &AppHandle, config: AppConfig) -> Result<(), String> {
         let path = Self::get_config_path(app);
         
-        // Garante que a pasta app_data existe
         if let Some(parent) = path.parent() {
             let _ = fs::create_dir_all(parent);
         }

@@ -1,4 +1,3 @@
-// src-tauri/src/lib.rs
 mod models;
 mod services;
 mod commands;
