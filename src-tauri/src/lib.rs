@@ -354,38 +354,68 @@ async fn update_manifest_db(app: AppHandle) -> Result<String, String> {
     }
 }
 
-fn resolve_path_root(path_str: &str) -> PathBuf {
+fn resolve_path_root(path_str: &str, game_id: u32) -> PathBuf {
     let base_dirs = BaseDirs::new().expect("BaseDirs error");
     let user_dirs = UserDirs::new().expect("UserDirs error");
+
+    if cfg!(target_os = "linux") && (path_str.contains("AppData") || path_str.contains("Saved Games")) {
+        if let Ok(steamdir) = SteamDir::locate() {
+            let proton_path = steamdir.path()
+                .join("steamapps")
+                .join("compatdata")
+                .join(game_id.to_string())
+                .join("pfx")
+                .join("drive_c")
+                .join("users")
+                .join("steamuser");
+
+            if proton_path.exists() {
+                let mut resolved = path_str.to_string();
+                resolved = resolved.replace("%USERPROFILE%", proton_path.to_str().unwrap());
+                resolved = resolved.replace("<home>", proton_path.to_str().unwrap());
+                resolved = resolved.replace("%APPDATA%", proton_path.join("AppData").join("Roaming").to_str().unwrap());
+                resolved = resolved.replace("%LOCALAPPDATA%", proton_path.join("AppData").join("Local").to_str().unwrap());
+
+                let mut p = PathBuf::from(resolved.replace("\\", "/"));
+                if p.to_string_lossy().starts_with("C:") || p.to_string_lossy().starts_with("c:") {
+                    let s = p.to_string_lossy()[2..].to_string();
+                    p = PathBuf::from(s);
+                }
+                return p;
+            }
+        }
+    }
+
     let mut replacements = HashMap::new();
-    replacements.insert(
-        "%LOCALAPPDATA%",
-        base_dirs.data_local_dir().to_str().unwrap(),
-    );
+    replacements.insert("%LOCALAPPDATA%", base_dirs.data_local_dir().to_str().unwrap());
     replacements.insert("%APPDATA%", base_dirs.config_dir().to_str().unwrap());
     replacements.insert("%USERPROFILE%", user_dirs.home_dir().to_str().unwrap());
     replacements.insert("<home>", user_dirs.home_dir().to_str().unwrap());
     replacements.insert("<winAppData>", base_dirs.config_dir().to_str().unwrap());
-    replacements.insert(
-        "<winLocalAppData>",
-        base_dirs.data_local_dir().to_str().unwrap(),
-    );
+    replacements.insert("<winLocalAppData>", base_dirs.data_local_dir().to_str().unwrap());
+
     if let Some(doc) = user_dirs.document_dir() {
         replacements.insert("%DOCUMENTS%", doc.to_str().unwrap());
         replacements.insert("<winDocuments>", doc.to_str().unwrap());
     }
+
     let mut resolved = path_str.to_string();
     for (key, val) in replacements {
         resolved = resolved.replace(key, val);
     }
+
     let stop_chars = ['<', '*', '?'];
     if let Some(idx) = resolved.find(|c| stop_chars.contains(&c)) {
         resolved = resolved[..idx].to_string();
     }
-    if resolved.ends_with('/') || resolved.ends_with('\\') {
-        resolved.pop();
+
+    if cfg!(target_os = "windows") {
+        resolved = resolved.replace("/", "\\");
+    } else {
+        resolved = resolved.replace("\\", "/");
     }
-    PathBuf::from(resolved)
+
+    PathBuf::from(resolved.trim_end_matches(|c| c == '/' || c == '\\'))
 }
 
 fn get_manifest_paths(app: &AppHandle, game_id: u32) -> Vec<PathBuf> {
@@ -403,13 +433,7 @@ fn get_manifest_paths(app: &AppHandle, game_id: u32) -> Vec<PathBuf> {
                                         files_map.keys().cloned().collect();
                                     keys.sort();
                                     for path_key in keys {
-                                        if path_key.contains("<win")
-                                            || path_key.contains("AppData")
-                                            || path_key.contains("Documents")
-                                            || path_key.contains("Saved Games")
-                                        {
-                                            found_paths.push(resolve_path_root(&path_key));
-                                        }
+                                        found_paths.push(resolve_path_root(&path_key, game_id));
                                     }
                                 }
                                 break;
@@ -432,7 +456,7 @@ fn get_custom_path(app: &AppHandle, game_id: u32) -> Option<PathBuf> {
                     serde_json::from_str::<HashMap<String, CustomGameEntry>>(&content)
                 {
                     if let Some(entry) = json.get(&game_id.to_string()) {
-                        return Some(resolve_path_root(&entry.win));
+                        return Some(resolve_path_root(&entry.win, game_id));
                     }
                 }
             }
@@ -544,7 +568,7 @@ fn get_installed_games() -> Vec<GameInfo> {
                 games_list.push(GameInfo {
                     id: app.app_id,
                     name: name.clone(),
-                    install_dir: app.install_dir.clone(),
+                    install_dir: app.install_dir.to_string(),
                     last_backup: check_existing_backup(&name),
                 });
             }
@@ -646,6 +670,7 @@ fn backup_game(app: AppHandle, game_id: u32, game_name: String) -> String {
     if count > 0 {
         format!("Sucesso:{}", timestamp)
     } else {
+        let _ = fs::remove_dir_all(&backup_root);
         format!("Aviso: Nenhum arquivo encontrado.")
     }
 }
